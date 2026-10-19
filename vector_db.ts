@@ -2,7 +2,7 @@ import { QdrantVectorStore } from "@langchain/qdrant";
 import { embeddings } from "./agents/CREATE_EMBEDDINGS";
 
 export const vectorStore = await QdrantVectorStore.fromExistingCollection(embeddings, {
-  url: process.env.QDRANT_URL,
+  url: process.env.QDRANT_URL || "http://localhost:6333",
   collectionName: "nodejsDocumentation",
-  apiKey:process.env.QDRANT_API_KEY
+  apiKey: process.env.QDRANT_API_KEY || undefined,
 });
