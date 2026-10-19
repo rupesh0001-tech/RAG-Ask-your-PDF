@@ -9,38 +9,38 @@ import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { vectorStore } from './vector_db';
 
 const app = express();
-const port = process.env.PORT || 8080; 
+const port = process.env.PORT || 8080;
 
 // Middleware to parse JSON request bodies
 app.use(express.json());
 
 // Configure storage destination and file names
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
-  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
+    destination: (req, file, cb) => cb(null, 'uploads/'),
+    filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
 });
 
 // Filter to strictly accept PDF files (with explicit Express/Multer types)
 const fileFilter = (
-  req: Request, 
-  file: Express.Multer.File, 
-  cb: multer.FileFilterCallback
+    req: Request,
+    file: Express.Multer.File,
+    cb: multer.FileFilterCallback
 ) => {
-  if (file.mimetype === 'application/pdf') {
-    cb(null, true);
-  } else {
-    cb(new Error('Only PDF files are allowed!'));
-  }
+    if (file.mimetype === 'application/pdf') {
+        cb(null, true);
+    } else {
+        cb(new Error('Only PDF files are allowed!'));
+    }
 };
 
 const upload = multer({ storage, fileFilter });
 
 // POST route to handle single PDF upload and extract its content
-app.post('/upload', upload.single('pdf'), async (req: Request, res: Response): Promise<any> => { 
-    try { 
+app.post('/upload', upload.single('pdf'), async (req: Request, res: Response): Promise<any> => {
+    try {
         const pdfFile = req.file;
 
-        if (!pdfFile) { 
+        if (!pdfFile) {
             return res.status(400).json({
                 message: 'No PDF file uploaded'
             });
@@ -55,18 +55,18 @@ app.post('/upload', upload.single('pdf'), async (req: Request, res: Response): P
 
         // 3. Optional: Pass the text to your GROQ agent for an automatic summary or action
         // const systemPrompt = `You are a helpful assistant analyzing a PDF document. Here is the content of the PDF:\n\n${extractedText}\n\nPlease summarize this document in 3 sentences.`;
-        
+
         // 4. create emmbeddings  and save it in vector DB 
 
         const spilitter = new RecursiveCharacterTextSplitter({
-        chunkSize: 1000,
-        chunkOverlap: 200
-    })
+            chunkSize: 1000,
+            chunkOverlap: 200
+        })
 
-    const docs = await spilitter.createDocuments([extractedText]);
-    await vectorStore.addDocuments(docs);
+        const docs = await spilitter.createDocuments([extractedText]);
+        await vectorStore.addDocuments(docs);
 
-    
+
 
 
         // 4. Return the results
@@ -79,7 +79,7 @@ app.post('/upload', upload.single('pdf'), async (req: Request, res: Response): P
             },
             summary: aiResponse
         });
-       
+
     } catch (error: any) {
         return res.status(500).json({
             message: 'Internal server error',
@@ -89,21 +89,23 @@ app.post('/upload', upload.single('pdf'), async (req: Request, res: Response): P
 });
 
 // POST route to handle ongoing chat interactions
-app.post('/chat', async (req: Request, res: Response): Promise<any> => { 
-    try { 
-        const data = req.body;
-
-        if (!data.prompt) {
-            return res.status(400).json({ message: 'Prompt is required' });
-        }
-
-        const response = await model.invoke(data.prompt); 
-
-        return res.status(200).json({ 
-            message: 'data received successfully',
-            data: response
-        });
-    } catch (error: any) { 
+app.post('/chat', async (req: Request, res: Response): Promise<any> => {
+    try {
+        const { prompt } = req.body
+        const docs = await vectorStore.similaritySearch(prompt, 5)
+        const context = docs.map(doc => doc.pageContent).join("/n")
+        const result = await model.invoke([
+            {
+                role: "system",
+                content: `you are a rag assistant and use this context ${context}`
+            },
+            {
+                role: "human",
+                content: prompt
+            }
+        ])
+        return res.json(result.content)
+    } catch (error: any) {
         return res.status(500).json({
             message: 'Internal server error',
             error: error?.message
@@ -112,5 +114,5 @@ app.post('/chat', async (req: Request, res: Response): Promise<any> => {
 });
 
 app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+    console.log(`Server is running on port ${port}`);
 });
