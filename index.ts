@@ -4,9 +4,19 @@ import { model } from './agents/GROQ';
 import multer from 'multer';
 import path from 'path'; // 👈 Added missing path import
 import fs from 'fs'; // 👈 Added fs to read the uploaded file
-import pdfParse from 'pdf-parse'; // 👈 Added PDF parser
+import { PDFParse } from 'pdf-parse'; // 👈 Added PDF parser (v2 named import)
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { vectorStore } from './vector_db';
+
+// Helper to extract text & page count with pdf-parse v2
+async function parsePdf(dataBuffer: Buffer | Uint8Array) {
+    const parser = new PDFParse({ data: dataBuffer });
+    const result = await parser.getText();
+    return {
+        text: result.text,
+        numpages: result.total,
+    };
+}
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -61,11 +71,12 @@ app.post('/upload', upload.single('pdf'), async (req: Request, res: Response): P
         const dataBuffer = fs.readFileSync(pdfFile.path);
 
         // 2. Parse the PDF text contents
-        const parsedPdf = await pdfParse(dataBuffer);
+        const parsedPdf = await parsePdf(dataBuffer);
         const extractedText = parsedPdf.text;
 
         // 3. Optional: Pass the text to your GROQ agent for an automatic summary or action
         // const systemPrompt = `You are a helpful assistant analyzing a PDF document. Here is the content of the PDF:\n\n${extractedText}\n\nPlease summarize this document in 3 sentences.`;
+        let aiResponse: any = null;
 
         // 4. create emmbeddings  and save it in vector DB 
 
